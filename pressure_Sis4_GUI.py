@@ -1,5 +1,3 @@
-from ensurepip import version
-
 from eppy.modeleditor import IDF
 from eppy.results import fasthtml
 from eppy import modeleditor
@@ -19,14 +17,15 @@ import sys
 import pprint
 pp = pprint.PrettyPrinter()
 
+# Variáveis utilizada no programa
 version = ""
+ver = ""
 iddFile = ""
 folder = ""
 idfFile = ""
 table = ""
 epwFile = ""
-newTable = folder + "baseline_Ajustado.idf\eplustbl.htm"
-
+newTable = ""
 powerFansArray = []
 pressureFansArray = []
 fanMechEfficiency = 0.7
@@ -34,13 +33,9 @@ qtdepszhp = 0
 pszhp = ""
 idf = ""
 
-# Função que realiza o primeiro ajuste de pressão e roda o arquivo para o segundo ajuste
-def ajustePRESSAO(tableName):
 
-    progress['value'] = 35
-    window.update_idletasks()
-    window.update()
-    time.sleep(1)
+# Função que realiza o primeiro ajuste de pressão e roda o arquivo para o segundo ajuste -----------------------------
+def ajustePRESSAO(tableName):
 
     filehandle = open(tableName, 'r')
     fansOutput = fasthtml.tablebyname(filehandle, "Fans")
@@ -86,58 +81,43 @@ def ajustePRESSAO(tableName):
         pszhp[n].Supply_Fan_Delta_Pressure = newPressure
         pszhp[n].Supply_Fan_Motor_Efficiency = fanMotorEfficiency
 
-        progress['value'] = 50
-        window.update_idletasks()
-        window.update()
-        time.sleep(1)
-        # print("System Name: " + fansOutputTable[n+1][0])
-        # print("Adjusted Pressure: " + str(newPressure))
     idf.save()
+
 
 # Função que realiza o segundo ajuste (regra de 3) a partir da simulação ----------------------------------------------
 def segundoAjuste(tableName):
-    global qtdepszhp, pszhp, powerFansArray, pressureFansArray, idf
-
-    progress['value'] = 80
-    window.update_idletasks()
-    window.update()
-    time.sleep(1)
+    global qtdepszhp, pszhp, powerFansArray, pressureFansArray
 
     filehandle = open(tableName, 'r')
     fansOutput = fasthtml.tablebyname(filehandle, "Fans")
     fansOutputTable = fansOutput[1]
 
-    # print("New values from ajusted table:")
     for n in range(qtdepszhp):
         newSecPressure = round((powerFansArray[n] * pressureFansArray[n]) / fansOutputTable[n+1][5], 8)
         pszhp[n].Supply_Fan_Delta_Pressure = newSecPressure
-        labelPressure.insert(END, f"System Name: {fansOutputTable[n+1][0]} \n New Pressure: {newSecPressure} Pa\n\n")
+        labelPressure.insert(END, f"System Name: {fansOutputTable[n+1][0]} \n New Pressure: {round(newSecPressure, 4)} Pa\n\n")
 
     idf.saveas(folder + "\pressureAdjustedSIS4.idf")
-    
-    progress['value'] = 100
-    window.update_idletasks()
-    window.update()
-    time.sleep(1)
 
-    messagebox.showinfo("Ajuste Concluído \nArquivo salvo na pasta de destino.","Nome do novo arquivo: pressureAdjustedSIS4.idf")
 
 # Função principal (Executa o código) ---------------------------------------------------------------------------------
 def exacucaoCod():
-    global idf, pszhp, qtdepszhp, folder, idfFile, epwFile, table, newTable
+    global idf, pszhp, qtdepszhp, folder, idfFile, epwFile, table, newTable, ver
 
     progress.place(x = WIDTH/2 - 160, rely = 0.4, width=200, height=20)
-    infoLabel["text"] = "Em execução. Aguarde..."
-
+    infoLabel["text"] = "Iniciando. Aguarde..."
+    
+    #Progress------------
     progress['value'] = 5
     window.update_idletasks()
     window.update()
     time.sleep(1)
 
     idf = IDF(idfFile, epwFile)
-    infoLabel["text"] = "Simulação em Execução."
+    infoLabel["text"] = "Carregando dados."
 
-    progress['value'] = 15
+    #Progress------------
+    progress['value'] = 20
     window.update_idletasks()
     window.update()
     time.sleep(1)
@@ -147,44 +127,75 @@ def exacucaoCod():
     pszhp = idf.idfobjects['HVACTEMPLATE:SYSTEM:UNITARYHEATPUMP:AIRTOAIR']
 
     qtdepszhp = len(pszhp)
+
+    #Progress------------
+    progress['value'] = 40
+    window.update_idletasks()
+    window.update()
+    time.sleep(1)
+    infoLabel["text"] = "Ajustando simulação."
   
     ajustePRESSAO(table)
+
+    #Progress------------
+    progress['value'] = 60
+    window.update_idletasks()
+    window.update()
+    time.sleep(1)
+    infoLabel["text"] = "Simulação em Execução."
+
     idf.run(output_directory=f"{folder}")
 
-    progress['value'] = 65
+    #Progress------------
+    progress['value'] = 80
+    window.update_idletasks()
+    window.update()
+    time.sleep(1)
+    infoLabel["text"] = "Rodando Ajustes."
+
+    segundoAjuste(newTable)
+    infoLabel["text"] = "Salvando novo arquivo idf."
+    
+    #Progress------------
+    progress['value'] = 100
     window.update_idletasks()
     window.update()
     time.sleep(1)
 
-    segundoAjuste(newTable)
+    infoLabel["text"] = "Ajuste Concluído."
+    messagebox.showinfo("Aviso", f"Novo arquivo .idf salvo em:\n{folder}")
+    buttonClose["state"] = "normal"
 
-# Funções de seleção de arquivos para a simulação ---------------------------------------------------------------------
+
+#-----------------------------------Funções de seleção de arquivos para a simulação -----------------------------------
+
+# Função que seleciona o arquivo .idf ---------------------------------------------------------------------------------
 def idfSelection():
-    global idfFile, version, iddFile
+    global idfFile, version, iddFile, ver
     idfFile = filedialog.askopenfilename(filetypes=[("EnergyPlus", ".idf")])
 
     try:
         if idfFile.lower().endswith(('.idf')):
             infoLabel["text"] = f"Arquivo IDF: {idfFile}"
-            buttonEpw["state"] = "active"
+            buttonEpw["state"] = "normal"
 
             try: 
                 fo = open(idfFile, "r")
                 for i, line in enumerate(fo):
-                    if i == 10:
+                    if i == 3:
                         str = line
                 fo.close()
-                # versao = idfFile.idfobjects['VERSION'][0]
-                # print(versao)
-                # str = str.strip()
-                # version = str[0:3]
-                # ver = list(version)
-                # # print(ver)
-                # for n in range(len(ver)):
-                #     if ver[n] == '.':
-                #         ver[n] = '-'
-                # version = "V"+(''.join(ver))+"-0"
-                iddfile = f"C:/EnergyPlusV9-6-0/Energy+.idd"
+
+                str = str.strip()
+                version = str[0:3]
+                ver = list(version)
+
+                for n in range(len(ver)):
+                    if ver[n] == '.':
+                        ver[n] = '-'
+
+                version = "V"+(''.join(ver))+"-0"
+                iddfile = f"C:/EnergyPlus{version}/Energy+.idd"
 
                 try:
                     IDF.setiddname(iddfile)
@@ -200,33 +211,34 @@ def idfSelection():
         messagebox.showerror("Erro", "Arquivo não encontrado.")
     except FileExistsError: 
         messagebox.showerror("Erro", "Arquivo com problemas.")
-    print(idfFile)
-    
+
+
+# Função que seleciona o arquivo climático --------------------------------------------------------------------------
 def epwSelection():
     global epwFile
     epwFile = filedialog.askopenfilename(filetypes=[("Energyplus Weather", "*.epw")])
     try:
         if epwFile.lower().endswith(('.epw')):
             infoLabel["text"] = f"Arquivo IDF: {idfFile}\nArquivo Climático: {epwFile}"
-            buttonFolder["state"] = "active"
+            buttonFolder["state"] = "normal"
 
     except FileNotFoundError:
         messagebox.showerror("Erro", "Arquivo não encontrado.")
     except FileExistsError: 
         messagebox.showerror("Erro", "Arquivo com problemas.")
-    
-def folderSelection():
-    global folder
-    folder = filedialog.asksaveasfilename(defaultextension="idf", filetypes=[("EnergyPlus", "*.idf")], initialfile=f"baseline_Ajustado")
 
-    if folder.lower().endswith(('.idf')):
-        pass
-    else:
-        folder = folder + '.idf'
+
+# Função que seleciona o diretório de destino -------------------------------------------------------------------------
+def folderSelection():
+    global folder, newTable
+    folder = filedialog.asksaveasfilename(initialfile=f"baseline_Ajustado")
 
     infoLabel["text"] = f"Arquivo IDF: {idfFile}\nArquivo Climático: {epwFile}\nDiretório de destino: {folder}"
-    buttonTable["state"] = "active"
+    newTable = f"{folder}\eplustbl.htm"
+    buttonTable["state"] = "normal"
 
+
+#Função que seleciona o table da simulação realizada direto no E+ ----------------------------------------------------
 def tableSelection():
     global table
     table = filedialog.askopenfilename(filetypes=[("EnergyPlus", "*.html")])
@@ -234,14 +246,15 @@ def tableSelection():
         if table.lower().endswith(('.html')):
             infoLabel["text"] = f"Arquivo IDF: {idfFile}\nArquivo Climático: {epwFile}\nDiretório de destino: {folder}\nTable: {table}"
     
-            buttonLimpa["state"] = "active"
-            buttonExec["state"] = "active"
+            buttonLimpa["state"] = "normal"
+            buttonExec["state"] = "normal"
 
     except FileNotFoundError:
         messagebox.showerror("Erro", "Arquivo não encontrado.")
     except FileExistsError: 
         messagebox.showerror("Erro", "Arquivo com problemas.")
 
+# Função que limpa os arquivos selecionados para uma nova simulação ---------------------------------------------------
 def limpar():
     global idfFile, epwFile, version 
     idfFile = ""
@@ -260,7 +273,11 @@ def limpar():
     messagebox.showwarning("Aviso", f"Dados de entrada limpos!\n\nVersão do EnergyPlus definida:\nVersão {version}.")
     messagebox.showwarning("Aviso", f"Se deseja alterar a versão, reinicie o aplicativo.")
 
-# Interface Gráfica
+# Função que fecha a janea do programa -------------------------------------------------------------------------------
+def onClosing():
+    window.destroy()
+
+# Interface Gráfica ---------------------------------------------------------------------------------------------------
 HEIGHT = 600
 WIDTH = 800
 window = tk.Tk()
@@ -325,12 +342,11 @@ resultsFrame.place(relx = 0.5, rely = 0.41, relwidth = 0.9, relheight = 0.05, an
 l = Label(resultsFrame, text = "Resultados", font =("Roboto 11 bold"), bg= "#E82D3D", fg= "White")
 l.pack()
 
-lowerFrame = tk.Frame(window, bg = "#E82D3D", bd = 5)
-lowerFrame.place(relx = 0.5, rely = 0.45, relwidth = 0.9, relheight = 0.52, anchor = "n")
-
 # Label para impressão ---------------------------------------------------------------------
+lowerFrame = tk.Frame(window, bg = "#E82D3D", bd = 5)
+lowerFrame.place(relx = 0.5, rely = 0.45, relwidth = 0.9, relheight = 0.48, anchor = "n")
+
 labelPressure = tk.Text(lowerFrame, font = ("Roboto", 8), bd = 4, bg = "#E1E0EA", relief = FLAT)
-labelPressure.config(state=DISABLED)
 labelPressure.place(relwidth = 0.995, relheight = 0.995)
 
 scrollbar = ttk.Scrollbar(labelPressure, orient='vertical', command=labelPressure.yview)
@@ -338,8 +354,17 @@ scrollbar.pack(side=tk.RIGHT, fill = BOTH)
 
 labelPressure.config(yscrollcommand=scrollbar.set)
 
+# -------------------------------------------
+frameClose = tk.Frame(window, bd = 5, bg = "#1C4B73")
+frameClose.pack(side = BOTTOM)
+
+buttonClose = tk.Button(frameClose, text="Fechar", font = ("Roboto", 10), command=onClosing, relief = RAISED)
+buttonClose.pack(side = RIGHT)
+buttonClose["state"] = "disable"
+
 
 # Funções da Janela --------------------------------------------------------------------------------------------------
+
 def ajuda_sobre():
     messagebox.showinfo("Sobre", "Versão 1.0 \n\nDesenvolvido por Petinelli Inc. \nSetembro de 2022\n\nPor Luis Henrique Alberti")
 
@@ -380,8 +405,6 @@ menubar.add_cascade(label="Opções", menu=filemenu)
 menubar.add_cascade(label="Ajuda", command=orientacoes)
 menubar.add_cascade(label="Sobre", command=ajuda_sobre)
 
-
 window.config(menu=menubar)
-
 window.mainloop()
 
